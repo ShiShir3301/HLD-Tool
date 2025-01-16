@@ -2,3 +2,4 @@ os
 pandas
 streamlit
 matplotlib
+StringIO
