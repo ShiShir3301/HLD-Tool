@@ -7,16 +7,17 @@ Original file is located at
     https://colab.research.google.com/drive/1_6v0HYyraqTCCjhM8PvdtFypVCdBoD1f
 """
 
+import os
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 from io import StringIO
 
-# Streamlit Interface for Data Analysis
-st.title("Data Analysis and Visualization Tool")
+# Streamlit Interface for HLD Table Analysis
+st.title("HLD Table Analysis and Visualization Tool")
 
 # File Upload
-uploaded_file = st.file_uploader("Upload your data file (CSV or XLSX)", type=["csv", "xlsx"])
+uploaded_file = st.file_uploader("Upload your HLD table file (CSV or XLSX)", type=["csv", "xlsx"])
 
 if uploaded_file is not None:
     try:
@@ -34,13 +35,17 @@ if uploaded_file is not None:
         st.header("Data Summarization")
 
         st.subheader("Descriptive Statistics")
-        st.write(df.describe())
+        st.write(df.describe(include='all'))
 
         st.subheader("General Info")
         buffer = StringIO()
         df.info(buf=buffer)
         s = buffer.getvalue()
         st.text(s)
+
+        st.subheader("Missing Data Analysis")
+        missing_data = df.isnull().sum()
+        st.write(missing_data[missing_data > 0])
 
         # Data Querying
         st.header("Data Querying")
@@ -62,6 +67,15 @@ if uploaded_file is not None:
             st.write("Filtered Data by Rows", filtered_df)
         else:
             st.warning("Ensure that start row is less than end row.")
+
+        st.subheader("Advanced Query Builder")
+        query = st.text_input("Enter a query expression (e.g., `Age > 50 & Gender == 'Male'`)")
+        if query:
+            try:
+                queried_df = df.query(query)
+                st.write("Queried Data", queried_df)
+            except Exception as e:
+                st.error(f"Invalid query: {e}")
 
         # Data Visualization
         st.header("Data Visualization")
@@ -106,6 +120,23 @@ if uploaded_file is not None:
                     st.error(f"Error in plotting trend: {e}")
         else:
             st.warning("No suitable columns available for trend plot.")
+
+        st.subheader("Age-Specific Analysis")
+        if 'Age' in df.columns:
+            age_bins = st.slider("Define age bins (e.g., 0-100)", 0, 100, (0, 100))
+            age_grouped = df[(df['Age'] >= age_bins[0]) & (df['Age'] <= age_bins[1])]
+            st.write("Age-Filtered Data", age_grouped)
+
+        st.subheader("Gender Analysis")
+        if 'Gender' in df.columns:
+            gender_counts = df['Gender'].value_counts()
+            fig, ax = plt.subplots()
+            gender_counts.plot(kind='bar', color=['#1f77b4', '#ff7f0e'], ax=ax)
+            ax.set_title("Gender Distribution")
+            ax.set_xlabel("Gender")
+            ax.set_ylabel("Count")
+            st.pyplot(fig)
+            plt.close(fig)
 
     except Exception as e:
         st.error(f"An error occurred while processing the file: {e}")
