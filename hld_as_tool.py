@@ -11,6 +11,7 @@ import os
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+import seaborn as sns
 from io import StringIO
 
 # Streamlit Interface for HLD Table Analysis
@@ -47,26 +48,21 @@ if uploaded_file is not None:
         missing_data = df.isnull().sum()
         st.write(missing_data[missing_data > 0])
 
+        st.subheader("Cross-Tabulation")
+        if 'Age' in df.columns and 'Gender' in df.columns:
+            cross_tab = pd.crosstab(df['Age'], df['Gender'], normalize='index')
+            st.write("Age-Gender Distribution", cross_tab)
+
         # Data Querying
         st.header("Data Querying")
 
-        st.subheader("Column-based Filters")
-        column = st.selectbox("Select column to filter", options=df.columns)
-        unique_values = df[column].unique() if column else []
-        selected_values = st.multiselect("Select values to filter", options=unique_values)
-
-        filtered_df = df[df[column].isin(selected_values)] if selected_values else df
-        st.write("Filtered Data", filtered_df)
-
-        st.subheader("Row-based Filters")
-        row_start = st.number_input("Start Row", min_value=0, max_value=len(df)-1, step=1)
-        row_end = st.number_input("End Row", min_value=row_start, max_value=len(df), step=1, value=len(df))
-
-        if row_start < row_end:
-            filtered_df = filtered_df.iloc[row_start:row_end]
-            st.write("Filtered Data by Rows", filtered_df)
-        else:
-            st.warning("Ensure that start row is less than end row.")
+        st.subheader("Dynamic Pivot Table")
+        columns = st.multiselect("Select columns for pivot table", options=df.columns)
+        if columns:
+            pivot_values = st.selectbox("Select values for pivot table", options=df.columns)
+            if pivot_values:
+                pivot_table = pd.pivot_table(df, values=pivot_values, index=columns, aggfunc='mean')
+                st.write("Pivot Table", pivot_table)
 
         st.subheader("Advanced Query Builder")
         query = st.text_input("Enter a query expression (e.g., `Age > 50 & Gender == 'Male'`)")
@@ -80,54 +76,32 @@ if uploaded_file is not None:
         # Data Visualization
         st.header("Data Visualization")
 
-        st.subheader("Plot Distribution")
+        st.subheader("Interactive Heatmap")
         numeric_columns = df.select_dtypes(include=['number']).columns
-        if not numeric_columns.empty:
-            dist_column = st.selectbox("Select column for distribution plot", options=numeric_columns)
-            bins = st.slider("Number of bins", min_value=5, max_value=50, value=20, step=1)
-            color = st.color_picker("Pick a color", value="#4CAF50")
+        if len(numeric_columns) > 1:
+            x_axis = st.selectbox("Select X-axis", options=numeric_columns)
+            y_axis = st.selectbox("Select Y-axis", options=numeric_columns)
 
-            if dist_column:
+            if x_axis and y_axis:
+                heatmap_data = df[[x_axis, y_axis]].dropna()
                 fig, ax = plt.subplots()
-                filtered_df[dist_column].plot(kind='hist', bins=bins, color=color, ax=ax, alpha=0.7)
-                ax.set_title(f"Distribution of {dist_column}")
-                ax.set_xlabel(dist_column)
-                ax.set_ylabel("Frequency")
+                sns.heatmap(heatmap_data.corr(), annot=True, cmap="coolwarm", ax=ax)
                 st.pyplot(fig)
-                plt.close(fig)
-        else:
-            st.warning("No numeric columns available for distribution plot.")
 
-        st.subheader("Plot Trend")
-        if len(numeric_columns) > 0:
-            time_column = st.selectbox("Select time column", options=df.columns)
-            value_column = st.selectbox("Select value column", options=numeric_columns)
-
-            if time_column and value_column:
-                try:
-                    df[time_column] = pd.to_datetime(df[time_column], errors='coerce')
-                    df = df.dropna(subset=[time_column, value_column])
-                    sorted_df = df.sort_values(time_column)
-
-                    fig, ax = plt.subplots()
-                    ax.plot(sorted_df[time_column], sorted_df[value_column], marker='o', linestyle='-', color=color)
-                    ax.set_title(f"Trend of {value_column} over {time_column}")
-                    ax.set_xlabel(time_column)
-                    ax.set_ylabel(value_column)
-                    st.pyplot(fig)
-                    plt.close(fig)
-                except Exception as e:
-                    st.error(f"Error in plotting trend: {e}")
-        else:
-            st.warning("No suitable columns available for trend plot.")
-
-        st.subheader("Age-Specific Analysis")
-        if 'Age' in df.columns:
+        st.subheader("Mortality and Survival Analysis")
+        if 'Age' in df.columns and 'SurvivalRate' in df.columns:
             age_bins = st.slider("Define age bins (e.g., 0-100)", 0, 100, (0, 100))
-            age_grouped = df[(df['Age'] >= age_bins[0]) & (df['Age'] <= age_bins[1])]
-            st.write("Age-Filtered Data", age_grouped)
+            age_filtered = df[(df['Age'] >= age_bins[0]) & (df['Age'] <= age_bins[1])]
+            st.write("Age-Filtered Data", age_filtered)
 
-        st.subheader("Gender Analysis")
+            fig, ax = plt.subplots()
+            sns.lineplot(data=age_filtered, x='Age', y='SurvivalRate', ax=ax, marker="o")
+            ax.set_title("Survival Rate by Age")
+            ax.set_xlabel("Age")
+            ax.set_ylabel("Survival Rate")
+            st.pyplot(fig)
+
+        st.subheader("Gender-Based Analysis")
         if 'Gender' in df.columns:
             gender_counts = df['Gender'].value_counts()
             fig, ax = plt.subplots()
@@ -136,9 +110,28 @@ if uploaded_file is not None:
             ax.set_xlabel("Gender")
             ax.set_ylabel("Count")
             st.pyplot(fig)
-            plt.close(fig)
+
+        st.subheader("Customizable Dashboards")
+        chart_type = st.selectbox("Select Chart Type", options=["Bar", "Line", "Area"])
+        chart_column = st.selectbox("Select Column for Chart", options=numeric_columns)
+
+        if chart_column and chart_type:
+            fig, ax = plt.subplots()
+
+            if chart_type == "Bar":
+                df[chart_column].value_counts().plot(kind='bar', ax=ax, color="#4CAF50")
+            elif chart_type == "Line":
+                df[chart_column].plot(kind='line', ax=ax, color="#4CAF50")
+            elif chart_type == "Area":
+                df[chart_column].plot(kind='area', ax=ax, color="#4CAF50")
+
+            ax.set_title(f"{chart_type} Chart of {chart_column}")
+            ax.set_xlabel(chart_column)
+            ax.set_ylabel("Value")
+            st.pyplot(fig)
 
     except Exception as e:
         st.error(f"An error occurred while processing the file: {e}")
 else:
     st.info("Please upload a file to proceed.")
+
